@@ -25,17 +25,20 @@ class SettingsActivity : ComponentActivity() {
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
-        masterKey = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        
-        prefs = EncryptedSharedPreferences.create(
-            this,
-            "jarvis_encrypted_prefs",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+        prefs = try {
+            val key = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                this,
+                "jarvis_encrypted_prefs",
+                key,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (e: Exception) {
+            getSharedPreferences("jarvis_encrypted_prefs", android.content.Context.MODE_PRIVATE)
+        }
         
         setContent {
             OpenJarvisTheme {

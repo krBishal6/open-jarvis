@@ -64,6 +64,7 @@ abstract class GraphifyDB : RoomDatabase() {
                     "graphify.db"
                 )
                     .addMigrations(MIGRATION_2_3)
+                    .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance
                 instance

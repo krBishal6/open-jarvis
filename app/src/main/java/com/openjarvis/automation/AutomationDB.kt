@@ -104,7 +104,7 @@ fun AutomationManager.Automation.toEntity(): AutomationEntity {
     )
 }
 
-@Database(entities = [AutomationEntity::class], version = 1)
+@Database(entities = [AutomationEntity::class], version = 1, exportSchema = false)
 abstract class AutomationDB : RoomDatabase() {
     abstract fun automationDao(): AutomationDao
     
@@ -117,7 +117,7 @@ abstract class AutomationDB : RoomDatabase() {
                     context.applicationContext,
                     AutomationDB::class.java,
                     "automations.db"
-                ).build().also { INSTANCE = it }
+                ).fallbackToDestructiveMigration().build().also { INSTANCE = it }
             }
         }
     }

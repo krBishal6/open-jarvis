@@ -25,8 +25,8 @@ import com.openjarvis.ui.theme.OpenJarvisTheme
 
 class MainActivity : ComponentActivity() {
     
-    private lateinit var graphifyRepo: GraphifyRepository
-    private lateinit var agentCore: AgentCore
+    private var graphifyRepo: GraphifyRepository? = null
+    private var agentCore: AgentCore? = null
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -34,8 +34,12 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
-        graphifyRepo = GraphifyRepository(this)
-        agentCore = AgentCore(this)
+        try {
+            graphifyRepo = GraphifyRepository(this)
+            agentCore = AgentCore(this)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
         
         setContent {
             OpenJarvisTheme {
@@ -43,13 +47,17 @@ class MainActivity : ComponentActivity() {
                 var recentTasks by remember { mutableStateOf<List<TaskNode>>(emptyList()) }
                 
                 LaunchedEffect(Unit) {
-                    recentTasks = graphifyRepo.getRecentTasks(10)
+                    try {
+                        recentTasks = graphifyRepo?.getRecentTasks(10) ?: emptyList()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
                 }
                 
-                val accessibilityEnabled = isAccessibilityServiceEnabled()
-                val overlayEnabled = Settings.canDrawOverlays(this)
+                val accessibilityEnabled = try { isAccessibilityServiceEnabled() } catch (e: Exception) { false }
+                val overlayEnabled = try { Settings.canDrawOverlays(this) } catch (e: Exception) { false }
                 
-                val agentState by agentCore.state.collectAsState()
+                val agentState by (agentCore?.state ?: kotlinx.coroutines.flow.MutableStateFlow(AgentState.Idle)).collectAsState()
                 
                 if (!accessibilityEnabled || !overlayEnabled) {
                     PermissionScreen(
@@ -59,12 +67,21 @@ class MainActivity : ComponentActivity() {
                         onEnableOverlay = { startOverlaySettings() }
                     )
                 } else {
-                    DashboardScreen(
-                        onStartOverlay = { startOverlayService() },
-                        onOpenSettings = { openSettings() },
-                        graphifyRepo = graphifyRepo,
-                        modifier = Modifier.fillMaxSize()
-                    )
+                    graphifyRepo?.let { repo ->
+                        DashboardScreen(
+                            onStartOverlay = { startOverlayService() },
+                            onOpenSettings = { openSettings() },
+                            graphifyRepo = repo,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } ?: run {
+                        PermissionScreen(
+                            accessibilityEnabled = accessibilityEnabled,
+                            overlayEnabled = overlayEnabled,
+                            onEnableAccessibility = { startAccessibilitySettings() },
+                            onEnableOverlay = { startOverlaySettings() }
+                        )
+                    }
                 }
             }
         }

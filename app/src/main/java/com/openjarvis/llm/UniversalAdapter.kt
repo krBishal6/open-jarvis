@@ -1,6 +1,7 @@
 package com.openjarvis.llm
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.openjarvis.llm.providers.*
@@ -8,17 +9,20 @@ import com.openjarvis.local.ModelManager
 
 class UniversalAdapter(private val context: Context) {
     
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-    
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "jarvis_encrypted_prefs",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-    )
+    private val prefs: SharedPreferences = try {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "jarvis_encrypted_prefs",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    } catch (e: Exception) {
+        context.getSharedPreferences("jarvis_encrypted_prefs", Context.MODE_PRIVATE)
+    }
     
     fun getActiveProvider(): LLMProvider {
         val name = prefs.getString("provider_name", "Groq") ?: "Groq"
