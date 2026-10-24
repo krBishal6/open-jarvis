@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -66,23 +67,24 @@ class ScreenshotCapture(private val context: Context) {
     }
 
     fun capture(): Bitmap? {
-        if (!isCapturing || imageReader == null) return null
+        if (!isCapturing) return null
 
-        val surface = imageReader?.surface ?: return null
+        val reader = imageReader ?: return null
+        val surface = reader.surface ?: return null
         
         try {
             mediaProjection?.createVirtualDisplay(
                 "Screenshot",
-                surface.width,
-                surface.height,
-                surface.allocation,
-                surface.allocation,
+                reader.width,
+                reader.height,
+                DisplayMetrics.DENSITY_DEFAULT,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 surface,
                 null,
                 handler
             )
 
-            val image = imageReader?.acquireLatestImage()
+            val image = reader.acquireLatestImage()
             return image?.let { img ->
                 val planes = img.planes
                 val buffer: ByteBuffer = planes[0].buffer

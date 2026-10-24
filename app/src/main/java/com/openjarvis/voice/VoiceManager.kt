@@ -7,6 +7,7 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +53,10 @@ class VoiceManager(private val context: Context) {
     init {
         // Apply saved settings
         ttsEngine.setSpeechRate(getSpeechRate())
+    }
+
+    fun initialize() {
+        // Ready for operation
     }
 
     fun isVoiceEnabled(): Boolean = prefs.getBoolean(KEY_VOICE_ENABLED, false)

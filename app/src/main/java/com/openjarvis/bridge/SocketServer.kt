@@ -187,7 +187,7 @@ class SocketServer(
 
     private suspend fun handleCommand(writer: PrintWriter, requestId: String, cmd: String) {
         val job = scope.launch {
-            agentCore.getStateFlow().collectLatest { state ->
+            agentCore.state.collectLatest { state ->
                 when (state) {
                     is AgentState.Running -> {
                         writer.println("""{"requestId":"$requestId","status":"progress","result":"${state.step}"}""")
@@ -237,9 +237,5 @@ class SocketServer(
             .replace("\n", "\\n")
             .replace("\r", "\\r")
             .replace("\t", "\\t")
-    }
-
-    companion object {
-        const val SOCKET_NAME = "jarvis.port"
     }
 }

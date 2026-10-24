@@ -10,15 +10,14 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectTransformableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.pointerInput
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -102,18 +101,44 @@ fun FloatingOverlayWidget(
                         dampingRatio = 0.8f
                     )
                 ) + fadeIn(animationSpec = tween(150, delayMillis = 240)))
+                    .togetherWith(
+                        shrinkHorizontally(
+                            animationSpec = spring(
+                                stiffness = Spring.StiffnessMedium,
+                                dampingRatio = 0.8f
+                            )
+                        ) + shrinkVertically(
+                            animationSpec = spring(
+                                stiffness = Spring.StiffnessMedium,
+                                dampingRatio = 0.8f
+                            )
+                        ) + fadeOut(animationSpec = tween(100))
+                    )
             } else {
-                (shrinkHorizontally(
+                (expandHorizontally(
                     animationSpec = spring(
                         stiffness = Spring.StiffnessMedium,
                         dampingRatio = 0.8f
                     )
-                ) + shrinkVertically(
+                ) + expandVertically(
                     animationSpec = spring(
                         stiffness = Spring.StiffnessMedium,
                         dampingRatio = 0.8f
                     )
-                ) + fadeOut(animationSpec = tween(100)))
+                ) + fadeIn(animationSpec = tween(100)))
+                    .togetherWith(
+                        shrinkHorizontally(
+                            animationSpec = spring(
+                                stiffness = Spring.StiffnessMedium,
+                                dampingRatio = 0.8f
+                            )
+                        ) + shrinkVertically(
+                            animationSpec = spring(
+                                stiffness = Spring.StiffnessMedium,
+                                dampingRatio = 0.8f
+                            )
+                        ) + fadeOut(animationSpec = tween(100))
+                    )
             }
         },
         label = "overlay_expand"
@@ -602,7 +627,7 @@ private fun InputRowWithVoice(
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
-                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowUp,
+                    imageVector = Icons.Default.KeyboardArrowUp,
                     contentDescription = "Send",
                     tint = Color.White,
                     modifier = Modifier.size(16.dp)
