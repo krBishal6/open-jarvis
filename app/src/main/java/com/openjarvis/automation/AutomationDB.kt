@@ -24,19 +24,84 @@ data class AutomationEntity(
 @Dao
 interface AutomationDao {
     @Query("SELECT * FROM automations ORDER BY name")
-    suspend fun getAll(): List<AutomationManager.Automation>
+    suspend fun getAll(): List<AutomationEntity>
     
     @Query("SELECT * FROM automations WHERE id = :id")
-    suspend fun getById(id: String): AutomationManager.Automation?
+    suspend fun getById(id: String): AutomationEntity?
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(automation: AutomationManager.Automation)
+    suspend fun insert(automation: AutomationEntity)
     
     @Update
-    suspend fun update(automation: AutomationManager.Automation)
+    suspend fun update(automation: AutomationEntity)
     
     @Query("DELETE FROM automations WHERE id = :id")
     suspend fun delete(id: String)
+}
+
+fun AutomationEntity.toAutomation(): AutomationManager.Automation {
+    val schedule = when (scheduleType) {
+        "daily" -> AutomationManager.AutomationSchedule.Daily(scheduleHour, scheduleMinute)
+        "weekly" -> AutomationManager.AutomationSchedule.Weekly(scheduleDayOfWeek, scheduleHour, scheduleMinute)
+        "interval" -> AutomationManager.AutomationSchedule.Interval(scheduleIntervalMs)
+        "once" -> AutomationManager.AutomationSchedule.Once(scheduleIntervalMs)
+        else -> AutomationManager.AutomationSchedule.Interval(scheduleIntervalMs.coerceAtLeast(60000L))
+    }
+    return AutomationManager.Automation(
+        id = id,
+        name = name,
+        command = command,
+        schedule = schedule,
+        enabled = enabled,
+        lastRun = lastRun,
+        lastResult = lastResult,
+        runCount = runCount
+    )
+}
+
+fun AutomationManager.Automation.toEntity(): AutomationEntity {
+    var type = "interval"
+    var hour = 0
+    var minute = 0
+    var dayOfWeek = 0
+    var intervalMs = 0L
+
+    when (val s = schedule) {
+        is AutomationManager.AutomationSchedule.Daily -> {
+            type = "daily"
+            hour = s.hour
+            minute = s.minute
+        }
+        is AutomationManager.AutomationSchedule.Weekly -> {
+            type = "weekly"
+            dayOfWeek = s.dayOfWeek
+            hour = s.hour
+            minute = s.minute
+        }
+        is AutomationManager.AutomationSchedule.Interval -> {
+            type = "interval"
+            intervalMs = s.intervalMs
+        }
+        is AutomationManager.AutomationSchedule.Once -> {
+            type = "once"
+            intervalMs = s.atMs
+        }
+    }
+
+    return AutomationEntity(
+        id = id,
+        name = name,
+        command = command,
+        scheduleType = type,
+        scheduleHour = hour,
+        scheduleMinute = minute,
+        scheduleDayOfWeek = dayOfWeek,
+        scheduleIntervalMs = intervalMs,
+        enabled = enabled,
+        lastRun = lastRun,
+        lastResult = lastResult,
+        runCount = runCount
+    )
 }
 
 @Database(entities = [AutomationEntity::class], version = 1)
