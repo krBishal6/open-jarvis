@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
@@ -13,7 +12,18 @@ import android.view.Gravity
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.app.NotificationCompat
+import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.lifecycle.setViewTreeLifecycleOwner
+import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
+import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.openjarvis.R
 import com.openjarvis.agent.AgentCore
 import com.openjarvis.agent.AgentState
@@ -29,9 +39,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class OverlayService : Service() {
+class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
 
+    private val myViewModelStore = ViewModelStore()
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
     private var windowManager: WindowManager? = null
+    private var overlayView: ComposeView? = null
+    
+    override val viewModelStore: ViewModelStore get() = myViewModelStore
+    override val savedStateRegistry: SavedStateRegistry get() = savedStateRegistryController.savedStateRegistry
     
     private lateinit var agentCore: AgentCore
     private lateinit var voiceManager: VoiceManager
@@ -43,6 +59,7 @@ class OverlayService : Service() {
     private var isInitialized = false
 
     override fun onCreate() {
+        savedStateRegistryController.performRestore(null)
         super.onCreate()
         
         agentCore = AgentCore(this)
@@ -62,6 +79,50 @@ class OverlayService : Service() {
         // Load recent tasks
         CoroutineScope(Dispatchers.IO).launch {
             recentTasks = graphifyRepo.getRecentTasks(10)
+        }
+        
+        windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        showOverlay()
+    }
+    
+    private fun showOverlay() {
+        try {
+            if (!android.provider.Settings.canDrawOverlays(this)) return
+            
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 100
+                y = 200
+            }
+
+            val view = ComposeView(this).apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setViewTreeLifecycleOwner(this@OverlayService)
+                setViewTreeViewModelStoreOwner(this@OverlayService)
+                setViewTreeSavedStateRegistryOwner(this@OverlayService)
+                setContent {
+                    com.openjarvis.ui.theme.OpenJarvisTheme {
+                        val agentState by agentCore.state.collectAsState()
+                        FloatingOverlayWidget(
+                            agentState = agentState,
+                            voiceManager = voiceManager,
+                            recentTasks = recentTasks,
+                            onCommand = { command -> executeCommand(command) },
+                            onCollapse = { /* collapse */ }
+                        )
+                    }
+                }
+            }
+            overlayView = view
+            windowManager?.addView(view, params)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
     
@@ -86,12 +147,23 @@ class OverlayService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(intent: Intent?): IBinder? {
+        super.onBind(intent)
+        return null
+    }
 
     override fun onDestroy() {
+        try {
+            overlayView?.let { windowManager?.removeView(it) }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        overlayView = null
+        myViewModelStore.clear()
         super.onDestroy()
         stateCollectJob?.cancel()
         socketServer.stop()

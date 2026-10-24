@@ -1,14 +1,21 @@
 package com.openjarvis.ui
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,6 +34,18 @@ class MainActivity : ComponentActivity() {
     
     private var graphifyRepo: GraphifyRepository? = null
     private var agentCore: AgentCore? = null
+    private val accessibilityEnabledState = mutableStateOf(false)
+    private val overlayEnabledState = mutableStateOf(false)
+    
+    fun checkPermissions() {
+        accessibilityEnabledState.value = isAccessibilityServiceEnabled()
+        overlayEnabledState.value = try { Settings.canDrawOverlays(this) } catch (e: Exception) { false }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        checkPermissions()
+    }
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,9 +60,13 @@ class MainActivity : ComponentActivity() {
             e.printStackTrace()
         }
         
+        checkPermissions()
+        
         setContent {
             OpenJarvisTheme {
-                val context = LocalContext.current
+                val accessibilityEnabled by accessibilityEnabledState
+                val overlayEnabled by overlayEnabledState
+                
                 var recentTasks by remember { mutableStateOf<List<TaskNode>>(emptyList()) }
                 
                 LaunchedEffect(Unit) {
@@ -54,9 +77,6 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 
-                val accessibilityEnabled = try { isAccessibilityServiceEnabled() } catch (e: Exception) { false }
-                val overlayEnabled = try { Settings.canDrawOverlays(this) } catch (e: Exception) { false }
-                
                 val agentState by (agentCore?.state ?: kotlinx.coroutines.flow.MutableStateFlow(AgentState.Idle)).collectAsState()
                 
                 if (!accessibilityEnabled || !overlayEnabled) {
@@ -64,7 +84,8 @@ class MainActivity : ComponentActivity() {
                         accessibilityEnabled = accessibilityEnabled,
                         overlayEnabled = overlayEnabled,
                         onEnableAccessibility = { startAccessibilitySettings() },
-                        onEnableOverlay = { startOverlaySettings() }
+                        onEnableOverlay = { startOverlaySettings() },
+                        onRefresh = { checkPermissions() }
                     )
                 } else {
                     graphifyRepo?.let { repo ->
@@ -79,7 +100,8 @@ class MainActivity : ComponentActivity() {
                             accessibilityEnabled = accessibilityEnabled,
                             overlayEnabled = overlayEnabled,
                             onEnableAccessibility = { startAccessibilitySettings() },
-                            onEnableOverlay = { startOverlaySettings() }
+                            onEnableOverlay = { startOverlaySettings() },
+                            onRefresh = { checkPermissions() }
                         )
                     }
                 }
@@ -88,13 +110,33 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun isAccessibilityServiceEnabled(): Boolean {
-        val enabledServices = Settings.Secure.getString(
-            contentResolver,
-            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ) ?: return false
+        if (JarvisAccessibilityService.instance != null) return true
         
-        val componentName = ComponentName(this, JarvisAccessibilityService::class.java)
-        return enabledServices.contains(componentName.flattenToString())
+        try {
+            val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+            val list = am?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            if (list != null) {
+                for (service in list) {
+                    if (service.resolveInfo?.serviceInfo?.packageName == packageName) {
+                        return true
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
+        try {
+            val enabledServices = Settings.Secure.getString(
+                contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            ) ?: return false
+            return enabledServices.contains(packageName)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        
+        return false
     }
     
     private fun startAccessibilitySettings() {
@@ -107,8 +149,13 @@ class MainActivity : ComponentActivity() {
     }
     
     private fun startOverlayService() {
-        startService(Intent(this, OverlayService::class.java))
-        Toast.makeText(this, "Jarvis is active", Toast.LENGTH_SHORT).show()
+        try {
+            OverlayService.start(this)
+            Toast.makeText(this, "Jarvis is active", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(this, "Error starting overlay: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
     
     private fun openSettings() {
@@ -121,62 +168,79 @@ fun PermissionScreen(
     accessibilityEnabled: Boolean,
     overlayEnabled: Boolean,
     onEnableAccessibility: () -> Unit,
-    onEnableOverlay: () -> Unit
+    onEnableOverlay: () -> Unit,
+    onRefresh: () -> Unit
 ) {
     val primaryColor = com.openjarvis.ui.theme.VoidColor.Violet
     val onSurfaceColor = com.openjarvis.ui.theme.VoidColor.TextPrimary
     val onSurfaceVariantColor = com.openjarvis.ui.theme.VoidColor.TextSecondary
     
-    androidx.compose.foundation.layout.Column(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center
+        verticalArrangement = Arrangement.Center
     ) {
-        androidx.compose.material3.Text(
-            text = "Permission Required",
-            style = androidx.compose.material3.MaterialTheme.typography.headlineMedium,
+        Text(
+            text = "Permissions Required",
+            style = MaterialTheme.typography.headlineMedium,
             color = onSurfaceColor
         )
         
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(16.dp))
         
-        androidx.compose.material3.Text(
+        Text(
             text = "Open Jarvis needs accessibility and overlay permissions to control your device.",
-            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodyMedium,
             color = onSurfaceVariantColor,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(32.dp))
         
         if (!accessibilityEnabled) {
-            androidx.compose.material3.Button(
+            Button(
                 onClick = onEnableAccessibility,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                androidx.compose.material3.Text("Enable Accessibility Service")
+                Text("Enable Accessibility Service")
             }
             
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
         }
         
         if (!overlayEnabled) {
-            androidx.compose.material3.Button(
+            Button(
                 onClick = onEnableOverlay,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                androidx.compose.material3.Text("Enable Overlay Permission")
+                Text("Enable Overlay Permission")
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
         }
         
         if (accessibilityEnabled && overlayEnabled) {
-            androidx.compose.material3.Text(
-                text = "Jarvis is active",
-                style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                color = primaryColor
+            Text(
+                text = "✓ Permissions Granted",
+                style = MaterialTheme.typography.titleMedium,
+                color = com.openjarvis.ui.theme.VoidColor.Green
             )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = onRefresh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Continue to Dashboard")
+            }
+        } else {
+            TextButton(
+                onClick = onRefresh,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Refresh Status", color = primaryColor)
+            }
         }
     }
 }

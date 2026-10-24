@@ -89,7 +89,7 @@ fun DashboardScreen(
         ) {
             Spacer(modifier = Modifier.height(56.dp))
             
-            HeroSection(isSystemActive = isSystemActive)
+            HeroSection(isSystemActive = isSystemActive, onActivate = onStartOverlay)
             
             Spacer(modifier = Modifier.height(16.dp))
             
@@ -145,7 +145,7 @@ private fun OrbBackground() {
 }
 
 @Composable
-private fun HeroSection(isSystemActive: Boolean) {
+private fun HeroSection(isSystemActive: Boolean, onActivate: () -> Unit = {}) {
     Column {
         Surface(
             shape = RoundedCornerShape(999.dp),
@@ -203,12 +203,12 @@ private fun HeroSection(isSystemActive: Boolean) {
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        StatusBadge(isActive = isSystemActive)
+        StatusBadge(isActive = isSystemActive, onClick = onActivate)
     }
 }
 
 @Composable
-private fun StatusBadge(isActive: Boolean) {
+private fun StatusBadge(isActive: Boolean, onClick: () -> Unit = {}) {
     val infiniteTransition = rememberInfiniteTransition(label = "badge")
     
     val dotScale by infiniteTransition.animateFloat(
@@ -238,6 +238,7 @@ private fun StatusBadge(isActive: Boolean) {
     }
     
     Surface(
+        onClick = onClick,
         shape = RoundedCornerShape(999.dp),
         color = bgColor,
         border = androidx.compose.foundation.BorderStroke(1.dp, borderColor)
@@ -259,7 +260,7 @@ private fun StatusBadge(isActive: Boolean) {
             Spacer(modifier = Modifier.width(8.dp))
             
             Text(
-                text = if (isActive) "System Active" else "Tap to Activate",
+                text = if (isActive) "Overlay Active (Tap to launch)" else "Tap to Launch Floating Assistant",
                 style = TextStyle(
                     fontFamily = FontFamily.Default,
                     fontWeight = FontWeight(500),

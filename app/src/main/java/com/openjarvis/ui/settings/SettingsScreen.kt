@@ -1,5 +1,10 @@
 package com.openjarvis.ui.settings
 
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
+import android.content.Intent
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.BorderStroke
@@ -22,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -32,6 +38,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.openjarvis.accessibility.JarvisAccessibilityService
 import com.openjarvis.llm.UniversalAdapter
 import com.openjarvis.ui.theme.VoidColor
 
@@ -54,6 +64,29 @@ fun SettingsScreen(
     var speakResults by remember { mutableStateOf(true) }
     var speechRate by remember { mutableStateOf(1.05f) }
     var sttMode by remember { mutableStateOf("Push to Talk") }
+    
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var isAccessibilityGranted by remember { mutableStateOf(false) }
+    var isOverlayGranted by remember { mutableStateOf(false) }
+
+    fun refreshPermissions() {
+        isAccessibilityGranted = checkAccessibility(context)
+        isOverlayGranted = checkOverlay(context)
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        refreshPermissions()
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
     
     LaunchedEffect(selectedProvider) {
         showBaseUrlField = selectedProvider == "Custom"
@@ -279,14 +312,29 @@ fun SettingsScreen(
                 
                 PermissionRow(
                     title = "Accessibility",
-                    subtitle = "Required — Tap to enable"
+                    isGranted = isAccessibilityGranted,
+                    onClick = {
+                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
                 )
                 
                 Spacer(modifier = Modifier.height(12.dp))
                 
                 PermissionRow(
                     title = "Overlay",
-                    subtitle = "Required — Tap to enable"
+                    isGranted = isOverlayGranted,
+                    onClick = {
+                        val intent = Intent(
+                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                            android.net.Uri.parse("package:${context.packageName}")
+                        ).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(intent)
+                    }
                 )
                 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -713,17 +761,21 @@ private fun SettingsToggleRow(
 @Composable
 private fun PermissionRow(
     title: String,
-    subtitle: String
+    isGranted: Boolean,
+    onClick: () -> Unit
 ) {
-    val isGranted by remember { mutableStateOf(false) }
+    val subtitle = if (isGranted) "Granted — Active" else "Required — Tap to enable"
+    val tintColor = if (isGranted) VoidColor.Green else VoidColor.Red
+    val bgColor = if (isGranted) VoidColor.Green.copy(alpha = 0.12f) else VoidColor.Red.copy(alpha = 0.12f)
     
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .height(64.dp),
+            .height(64.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         color = VoidColor.Void900,
-        border = BorderStroke(1.dp, VoidColor.BorderSubtle)
+        border = BorderStroke(1.dp, if (isGranted) VoidColor.Green.copy(alpha = 0.3f) else VoidColor.BorderSubtle)
     ) {
         Row(
             modifier = Modifier
@@ -735,13 +787,13 @@ private fun PermissionRow(
                 modifier = Modifier
                     .size(36.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(VoidColor.Red.copy(alpha = 0.12f)),
+                    .background(bgColor),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
                     contentDescription = null,
-                    tint = VoidColor.Red,
+                    tint = tintColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -764,7 +816,7 @@ private fun PermissionRow(
                         fontFamily = FontFamily.Default,
                         fontWeight = FontWeight(400),
                         fontSize = 11.sp,
-                        color = VoidColor.Red
+                        color = tintColor
                     )
                 )
             }
@@ -772,9 +824,44 @@ private fun PermissionRow(
             Icon(
                 imageVector = Icons.Default.KeyboardArrowRight,
                 contentDescription = null,
-                tint = VoidColor.Red
+                tint = tintColor
             )
         }
+    }
+}
+
+private fun checkAccessibility(context: Context): Boolean {
+    if (JarvisAccessibilityService.instance != null) return true
+    try {
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
+        val list = am?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+        if (list != null) {
+            for (service in list) {
+                if (service.resolveInfo?.serviceInfo?.packageName == context.packageName) {
+                    return true
+                }
+            }
+        }
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    try {
+        val setting = Settings.Secure.getString(
+            context.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ) ?: return false
+        return setting.contains(context.packageName)
+    } catch (e: Exception) {
+        e.printStackTrace()
+    }
+    return false
+}
+
+private fun checkOverlay(context: Context): Boolean {
+    return try {
+        Settings.canDrawOverlays(context)
+    } catch (e: Exception) {
+        false
     }
 }
 
