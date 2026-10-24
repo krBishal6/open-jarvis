@@ -151,7 +151,7 @@ class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
         return null
     }
