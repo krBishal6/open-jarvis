@@ -86,7 +86,7 @@ class SelfHealingExecutor(private val context: Context) {
         attempt: Int
     ): Pair<String, String> {
         val system = """
-Action failed: ${action.description ?: action.action}
+Action failed: ${action.label ?: action.message ?: action.action}
 Expected to see: ${context.expectedState ?: "task completion"}
 Current screen shows: ${currentScreen.take(500)}
 Attempt: $attempt/$maxAttempts

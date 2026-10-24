@@ -4,12 +4,13 @@ import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.ArrayDeque
 
-class ScreenReader(private val service: JarvisAccessibilityService? = JarvisAccessibilityService.instance) {
+class ScreenReader(context: Context? = null) {
 
-    constructor(context: Context) : this(JarvisAccessibilityService.instance)
+    private val service: JarvisAccessibilityService?
+        get() = (context as? JarvisAccessibilityService) ?: JarvisAccessibilityService.instance
 
     fun extractAllText(): String {
-        val rootNode = (service ?: JarvisAccessibilityService.instance)?.rootInActiveWindow ?: return ""
+        val rootNode = service?.rootInActiveWindow ?: return ""
         val builder = StringBuilder()
         extractTextRecursive(rootNode, builder)
         rootNode.recycle()
@@ -38,7 +39,7 @@ class ScreenReader(private val service: JarvisAccessibilityService? = JarvisAcce
     }
 
     fun findNodeByText(text: String): AccessibilityNodeInfo? {
-        val rootNode = service.rootInActiveWindow ?: return null
+        val rootNode = service?.rootInActiveWindow ?: return null
         val result = findNodeRecursive(rootNode, text)
         rootNode.recycle()
         return result
@@ -72,7 +73,7 @@ class ScreenReader(private val service: JarvisAccessibilityService? = JarvisAcce
     }
 
     fun findNodeByHint(hint: String): AccessibilityNodeInfo? {
-        val rootNode = service.rootInActiveWindow ?: return null
+        val rootNode = service?.rootInActiveWindow ?: return null
         val result = findHintRecursive(rootNode, hint)
         rootNode.recycle()
         return result
@@ -104,7 +105,7 @@ class ScreenReader(private val service: JarvisAccessibilityService? = JarvisAcce
     }
 
     fun getFocusedNode(): AccessibilityNodeInfo? {
-        val rootNode = service.rootInActiveWindow ?: return null
+        val rootNode = service?.rootInActiveWindow ?: return null
         val focused = rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         rootNode.recycle()
         return focused
