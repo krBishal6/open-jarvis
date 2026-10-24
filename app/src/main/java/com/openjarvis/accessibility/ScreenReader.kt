@@ -4,7 +4,7 @@ import android.content.Context
 import android.view.accessibility.AccessibilityNodeInfo
 import java.util.ArrayDeque
 
-class ScreenReader(context: Context? = null) {
+class ScreenReader(private val context: Context? = null) {
 
     private val service: JarvisAccessibilityService?
         get() = (context as? JarvisAccessibilityService) ?: JarvisAccessibilityService.instance
